@@ -1,0 +1,10 @@
+{
+  "window_height"     : 400,
+  "window_width"      : 300,
+  "window_position_x" : 0,
+  "window_position_y" : 0,
+  "window_resizable"  : 0,
+  "image_path"        : "image/ononoki",
+  "image_count"       : 5,
+  "opacity"           : 0.6
+}
