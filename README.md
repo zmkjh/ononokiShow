@@ -8,5 +8,6 @@ Scrolling through the images.
 - 编译
   > gcc main.c cJSON/cJson.c -o test \`sdl2-config --libs\` -lsdl2_image
 - 通过修改config.json来改变show
+- image_path指向文件夹下图片应为序号（0~n-1）.png格式
 
 <img width="1085" height="636" alt="image" src="https://github.com/user-attachments/assets/413087ea-7d20-41f3-9669-7604452db011" />
