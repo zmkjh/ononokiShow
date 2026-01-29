@@ -14,19 +14,65 @@
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_video.h>
 #include <SDL2/SDL_image.h>
+#include <stdio.h>
 #include <stdlib.h>
 
-#include "config.h"
+#include "cJSON/cJSON.h"
 
 static inline void LOG(char* category, char* tip) {
-    FILE* logf = fopen(LOG_ADDRESS, "a");
+    FILE* logf = fopen("ononokiShow.log", "a");
     fprintf(logf, "%s: %s\n", category, tip);
     fclose(logf);
 }
 
 struct {
-    SDL_Texture*    texture[IMAGE_COUNT];
-    SDL_Rect        texture_rect[IMAGE_COUNT];
+    cJSON* json;
+
+    int window_height;
+    int window_width;
+    int window_position_x;
+    int window_position_y;
+    int window_resizable;
+
+    char* image_path;
+
+    int image_count;
+
+    float opacity;
+} config;
+
+void config_ctor() {
+    char buff[2048];
+
+    // read config file
+    FILE* config_file = fopen("config.json", "r");
+    fseek(config_file, 0, SEEK_END);
+    int file_size = ftell(config_file);
+
+    rewind(config_file);
+    fread(buff, 1, file_size, config_file);
+    buff[file_size] = '\0';
+
+    fclose(config_file);
+
+    config.json = cJSON_Parse((const char*)buff);
+    config.window_height = cJSON_GetObjectItem(config.json, "window_height")->valueint;
+    config.window_width = cJSON_GetObjectItem(config.json, "window_width")->valueint;
+    config.window_position_x = cJSON_GetObjectItem(config.json, "window_position_x")->valueint;
+    config.window_position_y = cJSON_GetObjectItem(config.json, "window_position_y")->valueint;
+    config.window_resizable = cJSON_GetObjectItem(config.json, "window_resizable")->valueint;
+    config.image_path = cJSON_GetObjectItem(config.json, "image_path")->valuestring;
+    config.image_count = cJSON_GetObjectItem(config.json, "image_count")->valueint;
+    config.opacity = cJSON_GetObjectItem(config.json, "opacity")->valuedouble;
+}
+
+void config_dtor() {
+    cJSON_Delete(config.json);
+}
+
+struct {
+    SDL_Texture**    texture;
+    SDL_Rect*        texture_rect;
 
     int             quit_flag;
 
@@ -56,11 +102,11 @@ void global_ctor() {
     }
 
     global.window = SDL_CreateWindow(
-        TITLE, WINDOW_POS_X, WINDOW_POS_Y,
-        WINDOW_WIDTH, WINDOW_HEIGHT,
+        "~", config.window_position_x, config.window_position_y,
+        config.window_width, config.window_height,
         SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_INPUT_FOCUS);
 
-    SDL_SetWindowOpacity(global.window, OPACITY);
+    SDL_SetWindowOpacity(global.window, config.opacity);
 
     if (global.window == NULL) {
         LOG("ERROR", "SDL_CreateWindow Failed");
@@ -80,10 +126,11 @@ void global_ctor() {
     }
 
     // pre-load images
-#define IMAGE_PATH_BUFF_SIZE 50
-    char buffer[IMAGE_PATH_BUFF_SIZE];
-    for (int i = 0; i < IMAGE_COUNT; i++) {
-        sprintf(buffer, "Assets/%d.png", i);
+    global.texture      = (SDL_Texture**)malloc(sizeof(SDL_Texture*) * config.image_count);
+    global.texture_rect = (SDL_Rect*)malloc(sizeof(SDL_Rect) * config.image_count);
+    char buffer[80];
+    for (int i = 0; i < config.image_count; i++) {
+        sprintf(buffer, "%s/%d.png", config.image_path, i);
         SDL_Surface* loaded_surface = IMG_Load((const char*)buffer);
         if (!loaded_surface) {
             LOG("ERROR", "fail to load image.");
@@ -99,6 +146,9 @@ void global_ctor() {
 }
 
 void global_dtor() {
+    free(global.texture);
+    free(global.texture_rect);
+
     SDL_DestroyRenderer(global.renderer);
     SDL_DestroyWindow(global.window);
     SDL_Quit();
@@ -110,7 +160,7 @@ int shoud_run() {
 
 void render() {
     SDL_RenderClear(global.renderer);
-    if (RESIZABLE)
+    if (config.window_resizable)
         SDL_SetWindowSize(global.window, global.texture_rect[global.image_index].w, global.texture_rect[global.image_index].h);
 
     SDL_Rect dst_rect = {0,0,0,0};
@@ -125,10 +175,10 @@ void render() {
 
 void process_keycode(SDL_Scancode keycode) {
     switch (keycode) {
-    case KEY_SWITCH:
-        global.image_index = (global.image_index+1)%IMAGE_COUNT;
+    case SDL_SCANCODE_DELETE:
+        global.image_index = (global.image_index+1) % config.image_count;
         break;
-    case KEY_QUIT:
+    case SDL_SCANCODE_ESCAPE:
         global_quit();
         break;
     default:
@@ -152,6 +202,7 @@ void event() {
 
 int main(int argc, char *argv[]) {
     // init
+    config_ctor();
     global_ctor();
 
     // mainloop
@@ -160,11 +211,12 @@ int main(int argc, char *argv[]) {
         render();
 
         // release cpu clip.
-        SDL_Delay(FRAME_SLEEP);
+        SDL_Delay(60);
     }
 
     // quit
     global_dtor();
+    config_dtor();
     return 0;
 }
 
